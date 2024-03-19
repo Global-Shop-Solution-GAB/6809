@@ -1,0 +1,115 @@
+Program.Sub.ScreenSU.Start
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+Variable.Global.iBIRunID.Declare(Long,-1)
+Variable.Global.iBILogID.Declare(Long,-1)
+Variable.Global.bSentinel.Declare(Boolean,False)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'Adding in CODE SORT and THICKNESS for WILLINGTON NAMEPLATE, INC. to print on the INV labels 6/20/22 - Sam Stanka
+'Quote: 13605-0
+'Created From BIR_PU_PO_Receipt.gas
+
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+F.ODBC.Connection!con.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass)
+F.Intrinsic.Control.CallSub(Loaddata)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+    Function.Intrinsic.String.Concat("Project: GCG_6809_PU_PO_Receipt_Label.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+    F.Intrinsic.UI.Msgbox(V.Local.sError)
+    F.Intrinsic.Control.CallSub(Unload)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Main.End
+
+Program.Sub.Unload.Start
+F.Intrinsic.Control.SetErrorHandler("Unload_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+
+F.ODBC.Connection!con.Close
+F.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Unload_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+    Function.Intrinsic.String.Concat("Project: GCG_6809_PU_PO_Receipt_Label.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+    F.Intrinsic.UI.Msgbox(V.Local.sError)
+    F.Intrinsic.Control.End
+Function.Intrinsic.Control.EndIf
+Program.Sub.Unload.End
+
+Program.Sub.LoadData.Start
+F.Intrinsic.Control.SetErrorHandler("LoadData_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sSql.Declare(String)
+
+'Getting run ID passed down
+V.Global.iBIRunID.Set(V.Passed.DATA-GAB-0)
+'Getting log ID passed down
+V.Global.iBILogID.Set(V.Passed.DATA-GAB-1)
+'Getting Sentinel flag passed down
+Variable.Global.bSentinel.Set(Variable.Passed.DATA-GAB-2)
+
+'Loading data from Y table, as being label being printed from Menu, Selecting all fields as all fields are transferred over from Y table to Z table
+Function.Intrinsic.String.Build("Select * From Y_PU_PORCPT where RUNID = {0}",V.Global.iBIRunID,V.Local.sSql)
+Function.Data.DataTable.CreateFromSQL("dtPO","con",v.Local.sSql)
+
+Function.Intrinsic.Control.If(v.DataTable.dtPO.RowCount,>,-1)
+    'Checking to see if sequence being printed is Codesoft label
+    Function.Intrinsic.Control.If(Variable.Global.bSentinel,=,True)
+    	
+    	'Adding in CODE SORT and THICKNESS for WILLINGTON NAMEPLATE, INC. 6/20/22
+    	Function.Data.DataTable.AddExpressionColumn("dtPO","PartLoc","String","TRIM([PART]) + TRIM([LOCN])")
+    	Function.Data.DataTable.AddColumn("dtPO","CODE_SORT","String","")
+    	Function.Data.Dictionary.CreateFromSQL("dictCS","con","Select RTRIM(PART)+RTRIM(LOCATION),CODE_SORT From V_INVENTORY_MSTR")
+    	Function.Data.Dictionary.SetDefaultReturn("dictCS","")
+    	Function.Data.DataTable.FillFromDictionary("dtPO","dictCS","PartLoc","CODE_SORT")
+    	Function.Data.Dictionary.Close("dictCS")
+    	
+    	Function.Data.DataTable.AddColumn("dtPO","THICKNESS","Float",0.00)
+    	Function.Data.Dictionary.CreateFromSQL("dictTHICK","con","Select RTRIM(PART)+RTRIM(LOCATION), THICKNESS From V_INVENTORY_MST3")
+    	Function.Data.Dictionary.SetDefaultReturn("dictTHICK",0.00)
+    	Function.Data.DataTable.FillFromDictionary("dtPO","dictTHICK","PartLoc","THICKNESS")
+    	Function.Data.Dictionary.Close("dictTHICK")
+    	
+        'Stopping Logging
+        Function.Global.BI.StopLogging(V.Global.iBILogID)
+
+        'Printing Codesoft label
+        Function.Global.BI.PrintCodesoftLabelFromDataTable(V.Global.iBIRunID,V.Global.iBILogID,"dtPO","",true)
+    Function.Intrinsic.Control.EndIf
+Function.Intrinsic.Control.EndIf
+
+Function.Intrinsic.Control.CallSub(Unload)
+
+Function.Intrinsic.Control.ExitSub
+
+Function.Intrinsic.Control.Label("LoadData_Err")
+Function.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+    Function.Intrinsic.String.Concat("Project: GCG_6809_PU_PO_Receipt_Label.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+    Function.Intrinsic.UI.Msgbox(V.Local.sError)
+    Function.Intrinsic.Control.CallSub(Unload)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.LoadData.End
+
+
+Program.Sub.Comments.Start
+${$0$}$BIR_PU_PO_Receipt$}$Mitch$}$3/25/2014
+Program.Sub.Comments.End
+
